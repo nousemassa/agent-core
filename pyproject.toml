@@ -1,0 +1,44 @@
+[project]
+name = "agent-core"
+version = "0.18.0"
+description = "Общий слой продуктов: настройки, базы, каналы, трассировка, лексика решений"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+#: Зависимости — по разбору импортов, а не на глаз. Продукт получает слой колёсом и не обязан
+#: доустанавливать то, что слой импортирует.
+dependencies = [
+    # обращения к платформе и к сервису эмбеддингов
+    "httpx>=0.27",
+    # база: драйвер напрямую (ORM слою не нужен)
+    "asyncpg>=0.29",
+    # настройки
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    # Telegram: транспорт MTProto
+    "telethon>=1.45",
+    # трассировка (спаны уходят в приём OTLP)
+    "opentelemetry-api>=1.27",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-http>=1.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "build>=1.2"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agent_core*"]
+#: Двойники тестов в поставляемое колесо не входят: внутри `import pytest` и работа с временными
+#: каталогами, а колесо едет в образы. Тестам они видны из дерева исходников.
+exclude = ["agent_core.testing", "agent_core.testing.*"]
+
+[tool.pytest.ini_options]
+#: Обязательно в своём файле: при отдельном репозитории чужой `pytest.ini` не читается, а без `auto`
+#: падают все асинхронные тесты.
+asyncio_mode = "auto"
+#: Маркер объявлен здесь же: `make ci` зовёт `pytest -m "not live"`.
+markers = ["live: требует поднятую платформу и реальные токены"]

@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: username
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI_DB_URL: postgresql://username:password@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка окружения
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Линтер
+        run: ruff check .
+
+      - name: Офлайн-тесты
+        run: pytest tests -q -m "not live"
+
+      - name: Схема на чистой базе
+        run: python scripts/ci-schema-check.py --components core,runtime
+
+      - name: Колесо собирается и не содержит тестовых двойников
+        run: |
+          python -m build --wheel . --outdir dist
+          python - <<'PY'
+          import pathlib, zipfile
+          wheel = next(pathlib.Path("dist").glob("agent_core-*.whl"))
+          names = zipfile.ZipFile(wheel).namelist()
+          assert not any("agent_core/testing" in name for name in names), "двойники попали в колесо"
+          assert any("db/schema_runtime.py" in name for name in names), "в колесе нет схемы runtime"
+          print(f"{wheel.name}: файлов {len(names)}")
+          PY
